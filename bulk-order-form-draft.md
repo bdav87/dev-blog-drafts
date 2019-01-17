@@ -123,10 +123,12 @@ First, let's import React, ReactDOM, and the BulkOrderForm component itself:
 import React from "react";
 import ReactDOM from "react-dom";
 import BulkOrderForm from "./bulk-order-form/bulk-order-form";
+```
 
 At the bottom of the file we’ll write our function:
-app.js
 
+**app.js**
+```
 window.initBulkOrderForm = function initBulkOrderForm(productData) {
     ReactDOM.render(
         React.createElement(BulkOrderForm, productData, null),
