@@ -17,7 +17,7 @@ We're going to use the latest Cornerstone theme as a base. You can pull the them
 
 Once you've got the Stencil CLI installed and the Cornerstone theme downloaded, navigate to the theme directory in your terminal and install these dependencies:
 
-`npm install --save react react-dom css-loader style-loader babel-preset-react`
+`npm install --save react react-dom css-loader style-loader @babel/preset-react`
 
 Since we're introducing React into the theme, we'll need to configure Webpack to use a loader for JSX files. We'll also include a loader for CSS so we can introduce our own styling to the bulk order form. Include this in the module rules array in webpack.common.js:
 
@@ -30,7 +30,7 @@ Since we're introducing React into the theme, we'll need to configure Webpack to
     use: {
         loader: "babel-loader",
         options: {
-            presets: ["react"],
+            presets: ["@babel/preset-react"],
         },
     }
 },
