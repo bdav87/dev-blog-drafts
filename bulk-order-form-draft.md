@@ -15,11 +15,42 @@ Using the CLI will enable running the theme locally, helping us iterate over our
 
 We're going to use the latest Cornerstone theme as a base. You can pull the theme from the GitHub repo here: https://github.com/bigcommerce/cornerstone
 
-Once you've got the Stencil CLI installed and the Cornerstone theme downloaded, navigate to the theme directory in your terminal and install these dependencies:
+Alternatively you can download a fresh version of the latest Cornerstone from your store's control panel.
+
+## Installing Dependencies and Configuring Webpack
+Once you've got the Stencil CLI installed and the Cornerstone theme downloaded, navigate to the theme directory in your terminal. Due to an update around Babel dependencies between Cornerstone versions, you'll need to install these dependencies based on your theme versionn:
+
+### Cornerstone 3.0 and earlier
+`npm install --save react react-dom css-loader style-loader babel-preset-react`
+
+### Cornerstone 3.1 and later
 
 `npm install --save react react-dom css-loader style-loader @babel/preset-react`
 
-Since we're introducing React into the theme, we'll need to configure Webpack to use a loader for JSX files. We'll also include a loader for CSS so we can introduce our own styling to the bulk order form. Include this in the module rules array in webpack.common.js:
+Since we're introducing React into the theme, we'll need to configure Webpack to use a loader for JSX files. We'll also include a loader for CSS so we can introduce our own styling to the bulk order form. Include this in the `module.rules` array in `webpack.common.js`:
+
+### Cornesrtone 3.0 and earlier
+
+**webpack.common.js**
+
+```
+{
+    test: /\.jsx$/,
+    exclude: /node_modules/,
+    use: {
+        loader: "babel-loader",
+        options: {
+            presets: ["react"],
+        },
+    }
+},
+{
+    test: /\.css/,
+    loader:[ "style-loader", "css-loader" ]
+} 
+```
+
+### Cornerstone 3.1 and later
 
 **webpack.common.js**
 
@@ -39,7 +70,9 @@ Since we're introducing React into the theme, we'll need to configure Webpack to
     loader:[ "style-loader", "css-loader" ]
 } 
 ```
-You will also need to add the following to the resolve object:
+
+On either theme version,
+you will also need to add the following to the resolve object:
 
 **webpack.common.js**
 
@@ -47,14 +80,17 @@ You will also need to add the following to the resolve object:
 extensions: [".js", ".jsx"]
 ```
 
+## Preparing the layout template
+
 To enable the bulk order form on a category page, we should make it as simple as possible for a merchant to toggle it. Once our app is complete, a merchant should be able to edit a category in their control panel and simply select the bulk order form template.
 
 In BigCommerce themes, custom layout files need to be added to `templates/pages/custom`. Create the `custom` directory, then add another folder inside it named `category`. This lets the store know there is a custom layout file available for category pages.
 
-Create a file named `bulk-order-form.html` in `templates/pages/custom/category`. Next let's copy the contents from the existing `category.html` template to use as a base for our custom template. We don't need any product filtering or side navigation, so let’s remove the following code:
+Create a file named `bulk-order-form.html` in `templates/pages/custom/category`. Next let's copy the contents from the existing `category.html` template to use as a base for our custom template. We don't need any product filtering or side navigation, so let’s **remove** the following code:
 
 **bulk-order-form.html**
 ```
+// ...
 {{#if category.faceted_search_enabled}}
     <aside class="page-sidebar" id="faceted-search-container">
         {{> components/category/sidebar}}
@@ -70,27 +106,28 @@ Create a file named `bulk-order-form.html` in `templates/pages/custom/category`.
             </aside>
         {{/if}}
 {{/if}}
+// ...
 ```
-Since we're replacing the product content normally displayed on the category page, let's also go ahead and clear out everything in between the `<main>` elements:
+Since we're replacing the product content normally displayed on the category page, let's also go ahead and clear out everything **in between** the `<main>` elements (keep `<main>` in place):
 
 **bulk-order-form.html**
 ```
+//...
 {{#if category.products}}
     {{> components/category/product-listing settings=../settings}}
 {{else}}
     <p>{{lang "categories.no_products"}}</p>
 {{/if}}
+//...
 ```
 React needs an element to build on, so we'll create a div with the ID `bulk-order-form` inside the `<main>` element:
 
 **bulk-order-form.html**
 ```
-<div class="page">
-    <main class="page-content" id="product-listing-container">
-        <div id="bulk-order-form"></div>
-    </main>
-</div>
+    <div id="bulk-order-form"></div>
 ```
+
+## Setting Up the React App
 Now we'll create our React app directory within the theme files. Create a folder named `bulk-order-form` in `assets/js`. Next create a file inside the `bulk-order-form` directory named `bulk-order-form.jsx`. This will serve as the parent component for the order form.
 
 Ultimately we want to use the product data that's already provided for the page, so we don't have to manually write in product IDs or include direct image links. Our component will use an array for products in the component state that will be updated once product data is fed in as props.
@@ -120,9 +157,9 @@ First, let's import React, ReactDOM, and the BulkOrderForm component itself:
 
 **app.js**
 ```
-import React from "react";
-import ReactDOM from "react-dom";
-import BulkOrderForm from "./bulk-order-form/bulk-order-form";
+import React from 'react';
+import ReactDOM from 'react-dom';
+import BulkOrderForm from './bulk-order-form/bulk-order-form';
 ```
 
 At the bottom of the file we’ll write our function:
@@ -132,7 +169,7 @@ At the bottom of the file we’ll write our function:
 window.initBulkOrderForm = function initBulkOrderForm(productData) {
     ReactDOM.render(
         React.createElement(BulkOrderForm, productData, null),
-        document.getElementById("bulk-order-form")
+        document.getElementById('bulk-order-form')
     );
 };
 ```
@@ -161,12 +198,17 @@ Add the following at the end of the file, after `{{> layout/base}}`
 <script>
 const pageContext = JSON.parse({{jsContext}});
 let productData = [];
-pageContext["productIds"].forEach((id, index) => {
+pageContext['productIds'].forEach((id, index) => {
+    let imageURL = '';
+    pageContext['productImages'][index] === null ? 
+    imageURL = '' : 
+    imageURL = pageContext['productImages'][index].replace('{:size}', '100x100');
+
     productData.push({
         id: id,
-        name: pageContext["productNames"][index],
-        image: pageContext["productImages"][index].replace("{:size}", "100x100"),
-        price: pageContext["productPrices"][index],
+        name: pageContext['productNames'][index],
+        image: imageURL,
+        price: pageContext['productPrices'][index],
         quantity: 0
     })
 });
@@ -205,6 +247,8 @@ At this point, running the `stencil start` command should show the React app run
 [screenshot of bulk order form placeholder]
 
 We've confirmed that our React app is successfully injected into the page! Let's get some products loaded in.
+
+## Displaying Product Details
 
 We're already asking for the product data and passing it as props in the `initBulkOrderForm` function inside our layout file `bulk-order-form.html`. Now we need to use these to update the products array within our component state in `bulk-order-form.jsx`.
 
@@ -424,6 +468,8 @@ export default ProductGroup;
 
 That looks a bit better! We have product images, names, prices, and a quantity value populating on the page. Now we need to add functionality to adjust quantities and ultimately add the items to the cart.
 
+## Updating Product Quantities
+
 In `bulk-order-form.jsx` we'll write a function that will accept a quantity and product id, allowing the user to update the quantity in our component state for a particular product. Within the constructor, add the following code:
 ```
 this.updateQuantity = (quantity, id) => {
@@ -523,6 +569,8 @@ Notice that we are passing the `updateQuantity` function to the onClick handler 
 The quantity now updates when you click the up or down arrows! If you're still using `console.log(this.state)` in the render method in `bulk-order-form.jsx`, you should see the product quantities update in the state.`
 
 We've got all our products appearing and the quantities are adjustable. Now we need to add real functionality to the add to cart button. This is where the storefront cart API comes in.
+
+## Using the Storefront Cart API to Add Products to Cart
 
 Let's go back to `bulk-order-form.jsx`. Add a new method within the constructor called `addToCart`. The cart API payload needs an array of product objects including the product id and quantity. Since the property is called `lineItems`, we'll name our variable the same thing. In the code below, the products stored in state are mapped to a new array if they have at least 1 quantity. Mapping an array this way will return the same number of values as the original array, but with null values present at all indices where the condition is false. To clean this up, we also apply a filter to return an array free of null values.
 
@@ -672,7 +720,9 @@ this.addToCart = () => {
 
 If no cart is returned, we can make a POST to the `/api/storefront/carts` endpoint with our lineItems to create a new cart with the user’s selections. Otherwise, we pass the cart ID as a parameter to `/api/storefront/carts/{cart_id}/items` with the same payload. Should either of the requests fail, we log an error to the browser console. Otherwise, we log the response from the cart API, which should include all the current cart details.
 
-By now, you should be able to add multiple items to the cart at the same time. However, the user experience is a bit lacking - there's no visible letting you know items have been added. We should tell shoppers items are being added to the cart, then redirect them to the cart page once the API request has finished.
+By now, you should be able to add multiple items to the cart at the same time. However, the user experience is a bit lacking; there's no visible feedback letting you know items have been added. We should tell shoppers items are being added to the cart, then redirect them to the cart page once the API request has finished.
+
+## Improving the User Experience
 
 There is an empty column on the add to cart button row where we can display messages to shoppers. Let's add a message property to the state so we can update the messages when necessary. In the addToCart method in `bulk-order-form.jsx` we can set a message indicating items are being added to the cart. If no quantity is specified for any product, we should advise the shopper to set a quantity.
 
@@ -715,7 +765,6 @@ render() {
         </div>
         )
     }
-}
 ```
 
 **product-group-jsx**
@@ -749,7 +798,6 @@ this.addToCart = (e) => {
 ```
  if (lineItems.length > 0) {
     button.disabled = true;
-
 ```
 
 If add to cart fails for any reason, we can re-enable the button too. Instead of logging the error message to the console, we can pass it as a message.
@@ -782,7 +830,7 @@ function handleFailedAddToCart(message, self,  button) {
     }
 ```
 
-We can also clear any error messages if a shopper decides to modify one of the item quantities. In the updateQuantity method we can reset the message.
+We can also clear any error messages if a shopper decides to modify one of the item quantities. In the `updateQuantity` method we can reset the message.
 
 **bulk-order-form.jsx**
 
