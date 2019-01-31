@@ -471,6 +471,8 @@ That looks a bit better! We have product images, names, prices, and a quantity v
 ## Updating Product Quantities
 
 In `bulk-order-form.jsx` we'll write a function that will accept a quantity and product id, allowing the user to update the quantity in our component state for a particular product. Within the constructor, add the following code:
+
+**bulk-order-form.jsx**
 ```
 this.updateQuantity = (quantity, id) => {
     const products = [...this.state.products];
@@ -479,10 +481,14 @@ this.updateQuantity = (quantity, id) => {
         products.forEach(product => {
             product.id === id ? product.quantity = quantity : null
         });
-        this.setState({
-            products: products
-        })
+    } else {
+        products.forEach(product => {
+            product.id === id ? product.quantity = 0 : null
+        });
     }
+    this.setState({
+        products: products
+    });
 }
 ```
 
@@ -566,7 +572,7 @@ export default Product;
 ```
 Notice that we are passing the `updateQuantity` function to the onClick handler of both the increment and decrement buttons. This function needs to take a quantity and a product ID, so we pass the current quantity plus or minus 1 as well as the product ID prop of the `Product` component.
 
-The quantity now updates when you click the up or down arrows! If you're still using `console.log(this.state)` in the render method in `bulk-order-form.jsx`, you should see the product quantities update in the state.`
+The quantity now updates when you click the up or down arrows! If you're still using `console.log(this.state)` in the render method in `bulk-order-form.jsx`, you should see the product quantities update in the state.
 
 We've got all our products appearing and the quantities are adjustable. Now we need to add real functionality to the add to cart button. This is where the storefront cart API comes in.
 
@@ -618,16 +624,15 @@ We can assign this function to an onClick handler on the add to cart button to t
 
 ```
 render() {
-        return (
-            <div>
-                <ProductGroup 
-                    products={this.state.products}
-                    updateQuantity={this.updateQuantity}
-                    addToCart={this.addToCart}
-                    />
-            </div>
-        )
-    }
+    return (
+        <div>
+            <ProductGroup 
+              products={this.state.products}
+              updateQuantity={this.updateQuantity}
+              addToCart={this.addToCart}
+            />
+        </div>
+    )
 }
 ```
 
@@ -663,59 +668,58 @@ We'll write two separate functions to deal with the results, creating a new cart
 
 ```
 this.addToCart = () => {
-            const lineItems = this.state.products.map(product => {
-                if (product.quantity > 0) {
-                    return {
-                        productId: product.id,
-                        quantity: product.quantity
-                    }
-                }
-            }).filter(item => item != null);
-
-            if (lineItems.length > 0) {
-                this.setState({message: "Adding items to your cart..."});
-
-                fetch(`/api/storefront/cart`)
-                .then(response => response.json())
-                .then(cart => {
-                    if(cart.length > 0) {
-                        return addToExistingCart(cart[0].id)
-                    } else {
-                        return createNewCart()
-                    }
-                })
-                .catch(err => console.log(err))
-            }
-
-            async function createNewCart() {
-                const response = await fetch(`/api/storefront/carts`, {
-                    credentials: "include",
-                    method: "POST",
-                    body: JSON.stringify({ lineItems: lineItems })
-                });
-                const data = await response.json();
-                if (!response.ok) {
-                    return Promise.reject("There was an issue adding items to your cart. Please try again.")
-                } else {
-                    console.log(data);
-                }
-            }
-
-            async function addToExistingCart(cart_id) {
-                const response = await fetch(`/api/storefront/carts/${cart_id}/items`, {
-                    credentials: "include",
-                    method: "POST",
-                    body: JSON.stringify({ lineItems: lineItems })
-                });
-                const data = await response.json();
-                if (!response.ok) {
-                    return Promise.reject("There was an issue adding items to your cart. Please try again.")
-                } else {
-                    console.log(data);
-                }
+    const lineItems = this.state.products.map(product => {
+        if (product.quantity > 0) {
+            return {
+                productId: product.id,
+                quantity: product.quantity
             }
         }
+    }).filter(item => item != null);
+
+    if (lineItems.length > 0) {
+        this.setState({message: "Adding items to your cart..."});
+
+        fetch(`/api/storefront/cart`)
+        .then(response => response.json())
+        .then(cart => {
+            if(cart.length > 0) {
+                return addToExistingCart(cart[0].id)
+            } else {
+                return createNewCart()
+            }
+        })
+        .catch(err => console.log(err))
     }
+
+    async function createNewCart() {
+        const response = await fetch(`/api/storefront/carts`, {
+            credentials: "include",
+            method: "POST",
+            body: JSON.stringify({ lineItems: lineItems })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            return Promise.reject("There was an issue adding items to your cart. Please try again.")
+        } else {
+            console.log(data);
+        }
+    }
+
+    async function addToExistingCart(cart_id) {
+        const response = await fetch(`/api/storefront/carts/${cart_id}/items`, {
+            credentials: "include",
+            method: "POST",
+            body: JSON.stringify({ lineItems: lineItems })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            return Promise.reject("There was an issue adding items to your cart. Please try again.")
+        } else {
+            console.log(data);
+        }
+    }
+}
 ```
 
 If no cart is returned, we can make a POST to the `/api/storefront/carts` endpoint with our lineItems to create a new cart with the user’s selections. Otherwise, we pass the cart ID as a parameter to `/api/storefront/carts/{cart_id}/items` with the same payload. Should either of the requests fail, we log an error to the browser console. Otherwise, we log the response from the cart API, which should include all the current cart details.
@@ -731,22 +735,22 @@ We can also handle the redirect by adding another `.then` handler in the promise
 **bulk-order-form.jsx**
 ```
 if (lineItems.length > 0) {
-        this.setState({message: "Adding items to your cart..."});
+    this.setState({message: "Adding items to your cart..."});
 
-        fetch(`/api/storefront/cart`)
-        .then(response => response.json())
-        .then(cart => {
-            if(cart.length > 0) {
-                return addToExistingCart(cart[0].id)
-            } else {
-                return createNewCart()
-            }
-        })
-        .then(() => window.location = "/cart.php")
-        .catch(err => console.log(err))
-    } else {
-        this.setState({message: "Please select a quantity for at least 1 item"});
-    }
+    fetch(`/api/storefront/cart`)
+    .then(response => response.json())
+    .then(cart => {
+        if(cart.length > 0) {
+            return addToExistingCart(cart[0].id)
+        } else {
+            return createNewCart()
+        }
+    })
+    .then(() => window.location = "/cart.php")
+    .catch(err => console.log(err))
+} else {
+    this.setState({message: "Please select a quantity for at least 1 item"});
+}
 ```
 
 Since we're now setting a message in state, we can pass this message as props to `ProductGroup` and display it in the column to the left of the add to cart button.
@@ -763,27 +767,27 @@ render() {
                 addToCart={this.addToCart}
                 message={this.state.message}/>
         </div>
-        )
-    }
+    )
+}
 ```
 
 **product-group-jsx**
 ```
 return (
-        <div className="bulk-form-field">
-            <div className="bulk-form-row">
-                <div className="bulk-form-col"></div>
-                <div className="bulk-form-col"><strong>Product</strong></div>
-                <div className="bulk-form-col"><strong>Price</strong></div>
-                <div className="bulk-form-col"><strong>Quantity</strong></div>
-            </div>
-            { productRows }
-            <div className="bulk-form-row">
-                <div className="bulk-form-col message"><strong>{props.message}</strong></div>
-                <button className="button button--primary bulk-add-cart" onClick={props.addToCart}>Add to Cart</button>
-            </div>
+    <div className="bulk-form-field">
+        <div className="bulk-form-row">
+            <div className="bulk-form-col"></div>
+            <div className="bulk-form-col"><strong>Product</strong></div>
+            <div className="bulk-form-col"><strong>Price</strong></div>
+            <div className="bulk-form-col"><strong>Quantity</strong></div>
         </div>
-    )
+        { productRows }
+        <div className="bulk-form-row">
+            <div className="bulk-form-col message"><strong>{props.message}</strong></div>
+            <button className="button button--primary bulk-add-cart" onClick={props.addToCart}>Add to Cart</button>
+        </div>
+    </div>
+)
 ```
 
 We can go one step further and disable the add to cart button to avoid multiple clicks on the add to cart button. In the addToCart method, we can select the button and adjust whether it is disabled afterwards.
@@ -823,11 +827,11 @@ Instead of console.log, we're passing the error message to a function called `ha
 
 ```
 function handleFailedAddToCart(message, self,  button) {
-        self.setState({
-            message: message
-        });
-        return button.disabled = false;
-    }
+    self.setState({
+        message: message
+    });
+    return button.disabled = false;
+}
 ```
 
 We can also clear any error messages if a shopper decides to modify one of the item quantities. In the `updateQuantity` method we can reset the message.
@@ -836,18 +840,22 @@ We can also clear any error messages if a shopper decides to modify one of the i
 
 ```
 this.updateQuantity = (quantity, id) => {
-            const products = [...this.state.products];
-            quantity = parseInt(quantity);
-            if (quantity >= 0) {
-                products.forEach(product => {
-                    product.id === id ? product.quantity = quantity : null
-                });
-                this.setState({
-                    products: products,
-                    message: ''
-                })
-            }
-        }
+    const products = [...this.state.products];
+    quantity = parseInt(quantity);
+    if (quantity >= 0) {
+        products.forEach(product => {
+            product.id === id ? product.quantity = quantity : null
+        });
+    } else {
+        products.forEach(product => {
+            product.id === id ? product.quantity = 0 : null
+        });
+    }
+    this.setState({
+        products: products,
+        message: ""
+    });
+}
 ```
 
 [gif showing different messages appearing]
