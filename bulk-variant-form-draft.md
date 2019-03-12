@@ -1,4 +1,4 @@
-# Build a Bulk Order Form for Product Variants using the Storefront API, Catalog API, and React
+# Build a Bulk Order Form for Product Variants
 
 [screenshot of order form]
 
@@ -13,7 +13,7 @@ This app is built using the free BigCommerce Cornerstone theme as a base. You ca
 
 You'll want to make sure you have the Stencil CLI installed. This enables local development, allowing us to see changes in real time as we iterate on our project. You can find instructions to install and set up Stencil here [https://developer.bigcommerce.com/stencil-docs/getting-started/installing-stencil]
 
-## Install Dependencies and Configure webpack
+## Installing Dependencies and Configuring webpack
 Once you have Stencil installed and Cornerstone downloaded, navigate to the Cornerstone directory in your terminal. Run `npm install` to install the default theme dependencies, then install the app dependencies by running this command:
 
 `npm install —-save react react-dom css-loader style-loader @babel/preset-react`
@@ -136,7 +136,24 @@ input[type=number]::-webkit-inner-spin-button {
 }
 ```
 
+## Using the Custom Layout Template in Stencil CLI
+When the theme is uploaded to a store, a merchant will have the ability to select the custom layout file when they edit a product in the BigCommerce control panel. 
 
+
+To use the custom layout while developing with Stencil, include this within your `.stencil` file:
+
+```
+"customLayouts": {
+    "brand": {},
+    "category": {},
+    "page": {},
+    "product": {
+      "bulk-variant-form.html": "/your-product-page-url"
+    }
+  }
+```
+
+If you don't see a file named `.stencil` in your theme's root directory, be sure to run the `stencil init` command in your terminal.
 
 ## Adding React to the Theme
 In the `bulk-variant-form` directory create a new file named `bulk-variant-form.jsx`. To get started, let's include the following code:
@@ -167,7 +184,7 @@ export default class BulkVariantForm extends Component {
 
 ```
 
-To include React and mount our app on product pages, we'll need to import React and our parent component in `assets/js/app.js`. Include the following after `import Global from './theme/global';`: 
+To include React and mount our app on product pages, we'll need to import React and our parent component in `assets/js/app.js`. Include the following in `app.js`: 
 
 **app.js**
 
@@ -253,7 +270,7 @@ https://api.bigcommerce.com/stores/hfdehryc/v3/catalog/products/${id}/variants?i
 ```
 
 
-The `include_fields` parameter lets us specify what specific variant properties we need returned, allowing us to reduce the request overhead. We'll use these properties to populate a table of products in our bulk order form.
+The `include_fields` parameter lets us specify which variant properties we want returned. We'll use these properties to populate a table of products in our bulk order form.
 
 
 
@@ -293,7 +310,7 @@ componentDidMount() {
 }
 ```
 
-The variants in state will pass all the data returned from the API to create rows in our bulk order form. The **lineItems** property is structured to match the **lineItems** requirements for adding variants to the cart using the Storefront API. We are also updating the property **loaded** to indicate that the details we need are ready to be displayed to the user.
+The variants in state will pass all the data returned from the API to create rows in our bulk order form. The `lineItems` property is structured to match the `lineItems` requirements for adding variants to the cart using the Storefront API. We are also updating the property `loaded` to indicate that the details we need are ready to be displayed to the user.
 
 ## Loading Variant Details in the Order Form
 Now that we can pull variants into our application state, we can feed the values into our form. First we'll create the basic layout of the form that will be rendered after the API request to get variants is complete. Within the constructor in `bulk-variant-form.jsx`, add the following method:
@@ -323,7 +340,7 @@ this.renderAfterLoad = () => {
 }
 ```
 
-As the component is rendered, we want to make sure the data we need is available before displaying anything. In the component render method, we'll return the results of `renderAfterLoad`.
+As the component is rendered, we want to make sure the data we need is available before displaying anything. In the component `render` method, we'll return the results of `renderAfterLoad`.
 
 ```
 render() {     
@@ -344,7 +361,6 @@ In `assets/js/bulk-variant-form`, let's add a new file named `bulk-variant-rows.
 ```
 import React from 'react';
 
-// Need the option_display_name and label returned in order
 const filterOptionValues = (option_values) => {
     const nameValues = option_values.map((option, index) => {
         return <p key={index}><strong>{option.option_display_name}</strong>: {option.label}</p>
@@ -352,9 +368,9 @@ const filterOptionValues = (option_values) => {
     return nameValues;
 }
 
-const bulkProductRows = (props) => {
+const bulkVariantRows = (props) => {
     const variants = props.variants;
-    const productRows = variants.map((variant, index) => {
+    const variantRows = variants.map((variant, index) => {
         return (
             <div key={index} className='bulk-variant-row'>
                     <div className='bulk-variant-col'><img src={variant.image_url}/></div>
@@ -373,13 +389,18 @@ const bulkProductRows = (props) => {
         )
     })
 
-    return productRows;
+    return variantRows;
 }
 
-export default bulkProductRows;
+export default bulkVariantRows;
 ```
 
-Now we can include this in our form:
+Since a variant's `option_values` property is an array, we map all the option names and values in `filterOptionValues` and show this to the shopper. As an example, if I'm selling shirts, this could show size and color.
+
+Each element representing a column in the form populates with data from the API, except the last column, which has an input field for the quantity.
+
+
+Now that we have a component that can consume the variant data and return rows for each variant, let's import it into our parent component:
 
 **bulk-variant-form.jsx**
 
@@ -388,6 +409,8 @@ import BulkVariantRows from './bulk-variant-rows';
 ```
 
 Now we add the `BulkVariantRows` component in our `renderAfterLoad` method:
+
+**bulk-variant-form.jsx**
 
 ```
 <div className='bulk-variant-row'>
@@ -399,7 +422,6 @@ Now we add the `BulkVariantRows` component in our `renderAfterLoad` method:
 <div className='bulk-button-row'>
     // --snip
 </div>
-
 ```
 
 At this point, when you toggle the bulk order form on a product, you should see the variants listed in rows with their image, option values, price, and sku displayed. Now we need to provide the ability to set quantities and add variants to the cart.
@@ -425,9 +447,10 @@ this.changeQty = (variantID, qty) => {
 }
 ```
 
-This takes the variant ID and quantity set in the input field and updates the lineItems in our state so that they're ready to be passed to a Storefront API request.
+This takes the variant ID and quantity set in the input field and updates the `lineItems` in our state so that they're ready to be passed to a Storefront API request.
 
 Now we can pass this as a prop to `BulkVariantRows` so that all our variant rows have access to this method:
+
 **bulk-variant-form.jsx**
 
 ```
@@ -447,3 +470,88 @@ className='qtyField'
 onChange={(e) => props.changeQty(variant.id, e.target.value)}
 />
 ```
+
+At this point, adjusting the quantity in the form will update the quantity in our state. Now we need to be able to add items to the cart. In `bulk-variant-form.jsx` we'll add our last method in the constructor:
+
+**bulk-variant-form.jsx**
+
+```
+this.addToCart = (e) => {
+    const lineItems = this.state.lineItems.map(item => {
+        if (item.quantity > 0) {
+            return item;
+        }
+    }).filter(item => {
+        if (item !== undefined) {
+            return item;
+        }
+    });
+    
+    if (lineItems.length < 1) {
+        this.setState({message: 'Please set the quantity of at least 1 item.'})
+    } else {
+        e.target.disabled = true;
+        this.setState({message: 'Adding items to your cart...'})
+        fetch(`/api/storefront/cart`)
+        .then(response => response.json())
+        .then(cart => {
+            if(cart.length > 0) {
+                return addToExistingCart(cart[0].id)
+            } else {
+                return createNewCart()
+            }
+        })
+        .then(() => window.location = '/cart.php')
+        .catch(err => console.log(err))
+    }
+
+    async function createNewCart() {
+        const response = await fetch(`/api/storefront/carts`, {
+            credentials: "include",
+            method: "POST",
+            body: JSON.stringify({ lineItems: lineItems })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            return Promise.reject("There was an issue adding items to your cart. Please try again.")
+        } else {
+            console.log(data);
+        }
+    }
+    async function addToExistingCart(cart_id) {
+        const response = await fetch(`/api/storefront/carts/${cart_id}/items`, {
+            credentials: "include",
+            method: "POST",
+            body: JSON.stringify({ lineItems: lineItems })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            return Promise.reject("There was an issue adding items to your cart. Please try again.")
+        } else {
+            console.log(data);     
+        }
+    }
+}
+```
+
+To prepare the `lineItems` we'll send to the Storefront Cart API, we need to get the ID of all variants with a quantity of at least 1. Using `map` on an array returns a new array with the same number of items, which means any variant with a quantity of 0 is instead replaced with `undefined` in the new array. 
+
+We filter out all the items that are `undefined`, leaving us with a `lineItems` array that only includes a shopper's selected variants.
+
+Depending on if any `lineItems` are present, a message is displayed to the shopper. If there are `lineItems`, the add to cart button is disabled to prevent multiple submissions, and a fetch is made to the API to check if a cart exists or if a cart needs to be created.
+
+Once the request completes successfully, the shopper is redirected to the cart page.
+
+[image of all the stuff working]
+
+## Summary / TL;DR
+
+On product pages using a custom layout template, a React app is activated in the background after the default product view is rendered. After the React app is mounted on the page, a request is made to send the product's ID to an endpoint belonging to middleware.
+
+The middleware makes a request to the BigCommerce Catalog API to retrieve the product's variants. The middleware sends variant data back to the React app.
+
+A bulk order form is generated from the variants. The variant ID and the quantity for each variant are tracked in the component state.
+
+When a shopper adds variants to their cart, the quantity and variant ID are included in the request to the BigCommerce Storefront Cart API. After the request to the Cart API succeeds, a shopper is redirected to the cart page. 
+
+The shopper completes their purchase, marvelling at how quickly they could buy all those items.
