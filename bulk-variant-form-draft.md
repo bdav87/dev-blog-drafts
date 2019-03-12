@@ -57,19 +57,95 @@ Create a file named `bulk-variant-form.html` in `templates/pages/custom/product`
 
 In bulk-variant-form.html, we'll wrap `components/products/product-view ` in a div. Next we'll add a couple more elements to act as the root for React and the toggle for the bulk order form.
 
+**bulk-variant-form.html**
+
 ```
-<div id='standardTemplate'>{{> components/products/product-view schema=true }}</div>
-<div id='bulk-variant-form' style="display:none"></div>
-<button id='activateBulkForm' class='button button--primary'>Purchase in bulk</button>
+// --snip
+
+<button id='activateBulkForm' class='button button--primary' style='display:block;margin: 0 auto;'>Purchase in bulk</button>
+
+<div itemscope itemtype="http://schema.org/Product">
+    <div id='standardTemplate'>{{> components/products/product-view schema=true }}</div>
+    <div id='bulk-variant-form' style="display:none"></div>
+
+    // --snip
+
+</div>
 ```
 
+## Styling the Form
+First, let's create a new directory for our React app at `assets/js/bulk-variant-form`. In the `bulk-variant-form` directory create a new file named **styles.css**. I've included all the CSS below to get us up and running quickly, which you can modify per your own preferences:
+
+**styles.css**
+
+```
+.bulk-variant-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-column-gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.bulk-variant-col {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.bulk-variant-col > p {
+    margin: 0;
+}
+
+.bulk-variant-col > img {
+    max-width: 80px;
+}
+
+.bulk-form-field {
+    display: grid;
+    max-width: 90%;
+    margin: 0 auto;
+}
+
+.bulk-button-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-column-gap: 8px;
+    padding: 16px 0;
+}
+
+.qtyField {
+    max-width: 64px;
+    text-align: center;
+    display: block;
+}
+
+#bulkAddToCart {
+    grid-column: 5/5;
+    margin: 0;
+    height: 42px;
+}
+
+input[type=number]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+}
+
+#bulk-messaging {
+    grid-column: 4/5;
+}
+```
+
+
+
 ## Adding React to the Theme
-First, let's create a new directory for our React app at `assets/js/bulk-variant-form`. In the `bulk-variant-form` directory create a new file for our parent component called `bulk-variant-form.jsx`.
+In the `bulk-variant-form` directory create a new file named `bulk-variant-form.jsx`. To get started, let's include the following code:
 
 **bulk-variant-form.jsx**
 
 ```
 import React, { Component } from 'react';
+import './styles.css';
 
 export default class BulkVariantForm extends Component {
     constructor(props) {
@@ -118,6 +194,8 @@ The `initBulkVariantForm` function takes a product ID as an argument. When we in
 
 Let's switch back to the product layout file at `bulk-variant-form.html`. At the bottom of the file, add the following code:
 
+**bulk-variant-form.html**
+
 ```
 <script>
 const productID = {productID: `{{product.id}}`};
@@ -149,6 +227,223 @@ function toggleForm(standard, bulk, toggle) {
 </script>
 ```
 
-Here we are getting the product ID from the Handlebars value. The `productID` we pass as an argument to `initBulkVariantForm` is defined as an object because it needs to be passed as a prop to our parent component. Once the product ID is available in our component, we will pass it to custom middleware.
+First we get the product ID from a Handlebars expression. The `productID` variable we pass as an argument to `initBulkVariantForm` is defined as an object because it needs to be passed as a prop to our parent component. Once the product ID is available in our component, we will pass it to custom middleware.
 
-## Using Middleware to Make Requests to a Server Side API
+## Using Middleware to Pass Responses from a Server Side API to the Front End
+We need to get all of a product's variant IDs, since they are a required property to add variants to the cart using the Storefront API [link to cart api docs]. However, that data isn't completely available on a product page; the standard add to cart flow only needs to identify 1 variant at a time as a shopper chooses options.
+
+Using the BigCommerce Catalog API [link to docs page], we can retrieve all of a product's variants in 1 or (if your product has more than 250 variants) 2 requests. This is where the magic of middleware comes in, enabling us to safely get data restricted to the server side API and sending it to our front end React app.
+
+Our example middleware is going to be an AWS Lambda Function that makes requests to the Catalog API in response to a GET from our React app. Going into detail about the AWS implementation is out of the scope of this article, but the overall work flow should be applicable to your own middleware app or serverless function.
+
+Remember how we pulled the product ID in our custom layout file and passed it to our React app as props? Now we need to pass that to our middleware so it can make a request to the Catalog API. 
+
+In AWS I've set up an endpoint that responds to a GET request from the React app that includes the product ID as a query parameter. The middleware's URL endpoint requested by the front end looks similar to this:
+
+```
+https://xxxxxxxxx.execute-api.region.amazonaws.com/default/middleware-endpoint?product_id={product ID}
+```
+
+The Lambda Function reads the product ID from the query param and passes it to a Catalog API request structured like this:
+
+```
+GET
+
+https://api.bigcommerce.com/stores/hfdehryc/v3/catalog/products/${id}/variants?include_fields=calculated_price,inventory_level,sku,option_values,image_url
+```
+
+
+The `include_fields` parameter lets us specify what specific variant properties we need returned, allowing us to reduce the request overhead. We'll use these properties to populate a table of products in our bulk order form.
+
+
+
+Let's go over how to use this data in our React app. In `bulk-variant-form.jsx`, we'll set an initial state in the constructor:
+
+**bulk-variant-form.jsx**
+
+```
+this.state = {
+    variants: [],
+    lineItems: [],
+    loaded: false,
+    message: ''
+}
+```
+
+Using the `componentDidMount` lifecycle method, we'll make a fetch to our middleware endpoint and populate our state with the results:
+
+**bulk-variant-form.jsx**
+
+```
+componentDidMount() {
+    fetch(`https://xxxxxxxxx.execute-api.region.amazonaws.com/default/middleware-endpoint?product_id=${this.props.productID}`)
+    .then(response => response.json())
+    .then(formatted => {
+        const lineItems = formatted['data'].map(variant => {
+            return {variantId: variant.id, quantity: 0, productId: parseInt(this.props.productID)}
+        });
+
+        this.setState({
+            variants: formatted['data'],
+            lineItems: lineItems,
+            loaded: true
+        })
+    })
+    .catch(err => console.log('Bulk form could not load: ', err))
+}
+```
+
+The variants in state will pass all the data returned from the API to create rows in our bulk order form. The **lineItems** property is structured to match the **lineItems** requirements for adding variants to the cart using the Storefront API. We are also updating the property **loaded** to indicate that the details we need are ready to be displayed to the user.
+
+## Loading Variant Details in the Order Form
+Now that we can pull variants into our application state, we can feed the values into our form. First we'll create the basic layout of the form that will be rendered after the API request to get variants is complete. Within the constructor in `bulk-variant-form.jsx`, add the following method:
+
+**bulk-variant-form.jsx**
+
+```
+this.renderAfterLoad = () => {
+    if (this.state.loaded) {
+        return (
+            <div>
+                <div className='bulk-variant-row'>
+                    <div className='bulk-variant-col'><h5>Images</h5></div>
+                    <div className='bulk-variant-col'><h5>Values</h5></div>
+                    <div className='bulk-variant-col'><h5>Price</h5></div>
+                    <div className='bulk-variant-col'><h5>SKU</h5></div>
+                    <div className='bulk-variant-col'><h5>Quantity</h5></div>
+                </div>
+                
+                <div className='bulk-button-row'>
+                    <div className='bulk-variant-col' id='bulk-messaging'>{this.state.message}</div>
+                    <button className='bulk-variant-col button button--primary' id='bulkAddToCart'>Add to Cart</button>
+                </div>
+            </div>
+        )
+    }
+}
+```
+
+As the component is rendered, we want to make sure the data we need is available before displaying anything. In the component render method, we'll return the results of `renderAfterLoad`.
+
+```
+render() {     
+    return (
+        <div className='bulk-form-field'>
+            {this.renderAfterLoad()}
+        </div>
+    )
+}
+```
+
+This will give us the basic layout of the columns, as well as the add to cart button. Next, we need to build a component that will accept all the variants and render a row for each one.
+
+In `assets/js/bulk-variant-form`, let's add a new file named `bulk-variant-rows.jsx`.  This component will take all the variants as props and create a row for every variant.
+
+**bulk-variant-rows.jsx**
+
+```
+import React from 'react';
+
+// Need the option_display_name and label returned in order
+const filterOptionValues = (option_values) => {
+    const nameValues = option_values.map((option, index) => {
+        return <p key={index}><strong>{option.option_display_name}</strong>: {option.label}</p>
+    })
+    return nameValues;
+}
+
+const bulkProductRows = (props) => {
+    const variants = props.variants;
+    const productRows = variants.map((variant, index) => {
+        return (
+            <div key={index} className='bulk-variant-row'>
+                    <div className='bulk-variant-col'><img src={variant.image_url}/></div>
+                    <div className='bulk-variant-col'>{filterOptionValues(variant.option_values)}</div>
+                    <div className='bulk-variant-col'>${parseFloat(variant.calculated_price).toPrecision(4)}</div>
+                    <div className='bulk-variant-col'>{variant.sku}</div>
+                    <div className='bulk-variant-col'>
+                        <input 
+                          type='number' 
+                          min='0' 
+                          placeholder='0' 
+                          className='qtyField' 
+                        />
+                    </div>
+            </div>
+        )
+    })
+
+    return productRows;
+}
+
+export default bulkProductRows;
+```
+
+Now we can include this in our form:
+
+**bulk-variant-form.jsx**
+
+```
+import BulkVariantRows from './bulk-variant-rows';
+```
+
+Now we add the `BulkVariantRows` component in our `renderAfterLoad` method:
+
+```
+<div className='bulk-variant-row'>
+    // --snip
+</div>
+
+<BulkVariantRows variants={this.state.variants}/>
+
+<div className='bulk-button-row'>
+    // --snip
+</div>
+
+```
+
+At this point, when you toggle the bulk order form on a product, you should see the variants listed in rows with their image, option values, price, and sku displayed. Now we need to provide the ability to set quantities and add variants to the cart.
+
+## Setting Variant Quantity
+We need to update the lineItems in our component state whenever a shopper sets the quantity of any variant. First, create a new method in `bulk-variant-form.jsx` within the constructor:
+
+**bulk-variant-form.jsx**
+
+```
+this.changeQty = (variantID, qty) => {
+    this.setState({message: ''});
+    const lineItems = [...this.state.lineItems];
+    lineItems.forEach(item => {
+        if (item.variantId == variantID) {
+            item.quantity = parseInt(qty);
+        }
+    })
+    
+    this.setState({
+        lineItems: lineItems
+    })
+}
+```
+
+This takes the variant ID and quantity set in the input field and updates the lineItems in our state so that they're ready to be passed to a Storefront API request.
+
+Now we can pass this as a prop to `BulkVariantRows` so that all our variant rows have access to this method:
+**bulk-variant-form.jsx**
+
+```
+<BulkVariantRows variants={this.state.variants} changeQty={this.changeQty}/>
+```
+
+In `bulk-variant-rows.jsx`, we'll update the number `<input>` field so that it calls `changeQty` in response to an onChange event:
+
+**bulk-variant-rows.jsx**
+
+```
+<input 
+type='number' 
+min='0' 
+placeholder='0' 
+className='qtyField' 
+onChange={(e) => props.changeQty(variant.id, e.target.value)}
+/>
+```
