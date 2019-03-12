@@ -552,6 +552,6 @@ The middleware makes a request to the BigCommerce Catalog API to retrieve the pr
 
 A bulk order form is generated from the variants. The variant ID and the quantity for each variant are tracked in the component state.
 
-When a shopper adds variants to their cart, the quantity and variant ID are included in the request to the BigCommerce Storefront Cart API. After the request to the Cart API succeeds, a shopper is redirected to the cart page. 
+When a shopper adds variants to their cart, the variant ID and quantity are included in a request to the BigCommerce Storefront Cart API. After the request to the Cart API succeeds, a shopper is redirected to the cart page. 
 
 The shopper completes their purchase, marvelling at how quickly they could buy all those items.
