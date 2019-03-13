@@ -542,6 +542,15 @@ Depending on if any `lineItems` are present, a message is displayed to the shopp
 
 Once the request completes successfully, the shopper is redirected to the cart page.
 
+Now that the add to cart function is defined, let's attach it to the add to cart button:
+
+**bulk-variant-form.jsx**
+
+```
+<button className='bulk-variant-col button button--primary' id='bulkAddToCart' onClick={this.addToCart}>Add to Cart</button>
+```
+
+
 [image of all the stuff working]
 
 ## Summary / TL;DR
