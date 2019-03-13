@@ -27,15 +27,15 @@ To support React, we also need to configure webpack to use a loader for JSX file
  test: /\.jsx$/,
  exclude: /node_modules/,
  use: {
- loader: “babel-loader”,
+ loader: "babel-loader",
  options: {
- presets: [“@babel/preset-react”],
+ presets: ["@babel/preset-react"],
  },
  }
 },
 {
  test: /\.css/,
- loader:[ “style-loader”, “css-loader” ]
+ loader:[ "style-loader", "css-loader" ]
 }
 ```
 
